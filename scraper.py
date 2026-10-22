@@ -18,6 +18,10 @@ def extract_next_links(url, resp):
     #         resp.raw_response.url: the url, again
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
+    
+    DOMAINS_USED =(".ics.uci.edu",".cs.uci.edu",".informatics.uci.edu",".stat.uci.edu") #given in instructions
+    
+    
     return list()
 
 def is_valid(url):
