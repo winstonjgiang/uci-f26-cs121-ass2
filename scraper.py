@@ -1,21 +1,136 @@
 import re
+import os
+import json
+from collections import Counter
 from urllib.parse import urlparse, urljoin, urldefrag
 from html.parser import HTMLParser
 #resources: https://docs.python.org/3/library/urllib.parse.html , https://docs.python.org/3/library/html.parser.html 
 
 # Domain names to check for given in the assignment instructions
 DOMAINS_USED =("ics.uci.edu","cs.uci.edu","informatics.uci.edu","stat.uci.edu") 
+# HTML markup doesn't count as words
+SKIP_TEXT_TAGS = ("script", "style", "noscript", "template")
 
 class MainParser(HTMLParser): #
     def __init__(self): #helper function that goes tag by tag on page
         super().__init__()
         self.hrefs = [] #keeping <a> of href 
+        self.text = [] #Stores visible text on the page
+        self.skip_depth = 0 #Counts how many tags to skip
     def handle_starttag(self, tag, pairs): #called for opening tags
+        if tag in SKIP_TEXT_TAGS:
+            self.skip_depth += 1
         if tag == "a":
             for name, value in pairs: #pairs keeps what each href is , like [ (href, "/index.html")]
                 if name == "href" and value:
                     self.hrefs.append(value.strip())
-    
+    def handle_endtag(self, tag): #Handles closing if it detects a skip tag
+        if tag in SKIP_TEXT_TAGS and self.skip_depth > 0:
+            self.skip_depth -= 1
+    def handle_data(self, data): #Collects text between tags
+        if self.skip_depth == 0:
+            self.text.append(data)
+
+
+STATS_FILE = "crawl_stats.json"
+REPORT_FILE = "report.txt"
+SAVE_EVERY = 25 
+
+#English stop words list from https://www.ranks.nl/stopwords 
+STOP_WORDS = frozenset("""
+a about above after again against all am an and any are aren't as at be because been before being
+below between both but by can't cannot could couldn't did didn't do does doesn't doing don't down
+during each few for from further had hadn't has hasn't have haven't having he he'd he'll he's her
+here here's hers herself him himself his how how's i i'd i'll i'm i've if in into is isn't it it's
+its itself let's me more most mustn't my myself no nor not of off on once only or other ought our
+ours ourselves out over own same shan't she she'd she'll she's should shouldn't so some such than
+that that's the their theirs them themselves then there there's these they they'd they'll they're
+they've this those through to too under until up very was wasn't we we'd we'll we're we've were
+weren't what what's when when's where where's which while who who's whom why why's with won't would
+wouldn't you you'd you'll you're you've your yours yourself yourselves
+""".split())
+
+TOKEN_RE = re.compile(r"[a-z0-9]+(?:'[a-z0-9]+)*") 
+
+page_words = {} 
+word_freq = Counter()
+unsaved_pages = 0 
+
+def tokenize(text):
+    return TOKEN_RE.findall(text.lower())
+
+def load_stats(): 
+    global page_words, word_freq
+    if os.path.exists(STATS_FILE):
+        with open(STATS_FILE) as f:
+            data = json.load(f)
+        page_words = data.get("page_words", {})
+        word_freq = Counter(data.get("word_freq", {}))
+
+def reset_stats(): 
+    global page_words, word_freq, unsaved_pages
+    page_words = {}
+    word_freq = Counter()
+    unsaved_pages = 0
+    if os.path.exists(STATS_FILE):
+        os.remove(STATS_FILE)
+
+def save_stats():
+    global unsaved_pages
+    tmp_path = STATS_FILE + ".tmp"
+    with open(tmp_path, "w") as f:
+        json.dump({"page_words": page_words, "word_freq": word_freq}, f)
+    os.replace(tmp_path, STATS_FILE) 
+    unsaved_pages = 0
+
+def record_page(url, words):
+    global unsaved_pages
+    if url in page_words:
+        return 
+    page_words[url] = len(words)
+    for word in words:
+        if word in STOP_WORDS or len(word) < 2 or word.isdigit():
+            continue
+        word_freq[word] += 1
+    unsaved_pages += 1
+    if unsaved_pages >= SAVE_EVERY:
+        save_stats()
+
+def subdomain_counts(domain="ics.uci.edu"):
+    counts = Counter()
+    for url in page_words:
+        host = (urlparse(url).hostname or "").lower()
+        if host == domain or host.endswith("." + domain):
+            counts[host] += 1
+    return counts
+
+def write_report():
+    lines = []
+    lines.append(f"1. Unique pages found: {len(page_words)}")
+    lines.append("")
+
+    if page_words:
+        longest_url = max(page_words, key=page_words.get)
+        lines.append(f"2. Longest page: {longest_url} ({page_words[longest_url]} words)")
+    else:
+        lines.append("2. Longest page: none")
+    lines.append("")
+
+    lines.append("3. 50 most common words (stop words removed):")
+    for rank, (word, count) in enumerate(word_freq.most_common(50), 1):
+        lines.append(f"   {rank}. {word}, {count}")
+    lines.append("")
+
+    subdomains = subdomain_counts()
+    lines.append(f"4. Subdomains of ics.uci.edu: {len(subdomains)}")
+    for host in sorted(subdomains):
+        lines.append(f"http://{host}, {subdomains[host]}") 
+
+    with open(REPORT_FILE, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+load_stats()
+
 def scraper(url, resp):
     links = extract_next_links(url, resp)
     return [link for link in links if is_valid(link)]
@@ -42,6 +157,9 @@ def extract_next_links(url, resp):
     parser = MainParser() #call helper func
     parser.feed(html) #feed data to func
     parser.close() #end
+    page_url = urldefrag(main_url)[0]
+    if is_valid(page_url):
+        record_page(page_url, tokenize(" ".join(parser.text)))
     
     links_list = [] #all the urls we will get on the page
     for href in parser.hrefs:
@@ -98,3 +216,8 @@ def is_valid(url):
         raise
     except ValueError:
         return False #cant read with urlparser so dont crawl
+
+if __name__ == "__main__":
+    #run `python3 scraper.py` anytime (even mid-crawl) to rebuild report.txt from the saved stats
+    write_report()
+    print(open(REPORT_FILE).read())

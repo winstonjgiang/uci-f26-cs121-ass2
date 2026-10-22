@@ -108,3 +108,6 @@ venv.bak/
 
 *.full.py
 *.shelve
+# crawl report output
+crawl_stats.json*
+report.txt
