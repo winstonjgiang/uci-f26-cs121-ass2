@@ -3,7 +3,18 @@ from urllib.parse import urlparse, urljoin, urldefrag
 from html.parser import HTMLParser
 #resources: https://docs.python.org/3/library/urllib.parse.html , https://docs.python.org/3/library/html.parser.html 
 
+DOMAINS_USED =(".ics.uci.edu",".cs.uci.edu",".informatics.uci.edu",".stat.uci.edu") #given in instructions
 
+class MainParser(HTMLParser): #
+    def __init__(self): #helper function that goes tag by tag on page
+        super().__init__()
+        self.hrefs = [] #keeping <a> of href 
+    def beginning_tag(self, tag, pairs): #called for opening tags
+        if tag == "a":
+            for name, value in pairs: #pairs keeps what each href is , like [ (href, "/index.html")]
+                if name == "href" and value:
+                    self.hrefs.append(value.strip())
+    
 def scraper(url, resp):
     links = extract_next_links(url, resp)
     return [link for link in links if is_valid(link)]
@@ -18,9 +29,7 @@ def extract_next_links(url, resp):
     #         resp.raw_response.url: the url, again
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
-    
-    DOMAINS_USED =(".ics.uci.edu",".cs.uci.edu",".informatics.uci.edu",".stat.uci.edu") #given in instructions
-    
+        
     
     return list()
 
