@@ -60,6 +60,10 @@ def is_valid(url):
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
             return False
+        if not url.ascii(): #making sure url sent are all ascii valid
+            return False
+        if parsed.hostname is None or not parsed.hostname.endswith(DOMAINS_USED):
+            return False #check to make sure that the domains end with the 4 required ones only
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
             + r"|png|tiff?|mid|mp2|mp3|mp4"
@@ -73,3 +77,5 @@ def is_valid(url):
     except TypeError:
         print ("TypeError for ", parsed)
         raise
+    except ValueError:
+        return False #cant read with urlparser so dont crawl
