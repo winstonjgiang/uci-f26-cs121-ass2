@@ -1,5 +1,8 @@
 import re
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin, urldefrag
+from html.parser import HTMLParser
+#resources: https://docs.python.org/3/library/urllib.parse.html , https://docs.python.org/3/library/html.parser.html 
+
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
