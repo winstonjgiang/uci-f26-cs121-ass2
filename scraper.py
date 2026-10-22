@@ -9,7 +9,7 @@ class MainParser(HTMLParser): #
     def __init__(self): #helper function that goes tag by tag on page
         super().__init__()
         self.hrefs = [] #keeping <a> of href 
-    def beginning_tag(self, tag, pairs): #called for opening tags
+    def handle_starttag(self, tag, pairs): #called for opening tags
         if tag == "a":
             for name, value in pairs: #pairs keeps what each href is , like [ (href, "/index.html")]
                 if name == "href" and value:
@@ -35,7 +35,22 @@ def extract_next_links(url, resp):
     if not page_content:
         return [] #if we get resp.status == 200 but the page has no content at all, then we return nothing
     
-    return list()
+    main_url = resp.raw_response.url or url
+    html = page_content.decode("utf-8", errors ="ignore") #making sure everything passed is valid characters (ASCII, UTF-8 standard)
+    
+    parser = MainParser() #call helper func
+    parser.feed(html) #feed data to func
+    parser.close() #end
+    
+    list = []#all the urls we will get on the page
+    for href in parser.hrefs:
+        try:
+            abs_url = urljoin(main_url, href) #relative links to absolute links
+        except ValueError:
+            continue #broken links skipped so nothing crashes
+        abs_url, _ = urldefrag(abs_url) #remove fragments aka anything after the # in the url
+        list.append(abs_url) #add to list of links
+    return list
 
 def is_valid(url):
     # Decide whether to crawl this url or not. 
