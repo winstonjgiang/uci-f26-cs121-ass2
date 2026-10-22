@@ -3,7 +3,8 @@ from urllib.parse import urlparse, urljoin, urldefrag
 from html.parser import HTMLParser
 #resources: https://docs.python.org/3/library/urllib.parse.html , https://docs.python.org/3/library/html.parser.html 
 
-DOMAINS_USED =(".ics.uci.edu",".cs.uci.edu",".informatics.uci.edu",".stat.uci.edu") #given in instructions
+# Domain names to check for given in the assignment instructions
+DOMAINS_USED =("ics.uci.edu","cs.uci.edu","informatics.uci.edu","stat.uci.edu") 
 
 class MainParser(HTMLParser): #
     def __init__(self): #helper function that goes tag by tag on page
@@ -42,15 +43,15 @@ def extract_next_links(url, resp):
     parser.feed(html) #feed data to func
     parser.close() #end
     
-    list = []#all the urls we will get on the page
+    links_list = [] #all the urls we will get on the page
     for href in parser.hrefs:
         try:
             abs_url = urljoin(main_url, href) #relative links to absolute links
         except ValueError:
             continue #broken links skipped so nothing crashes
         abs_url, _ = urldefrag(abs_url) #remove fragments aka anything after the # in the url
-        list.append(abs_url) #add to list of links
-    return list
+        links_list.append(abs_url) #add to list of links
+    return links_list
 
 def is_valid(url):
     # Decide whether to crawl this url or not. 
@@ -60,10 +61,22 @@ def is_valid(url):
         parsed = urlparse(url)
         if parsed.scheme not in set(["http", "https"]):
             return False
-        if not url.ascii(): #making sure url sent are all ascii valid
+        if not url.isascii(): #making sure url sent are all ascii valid
             return False
-        if parsed.hostname is None or not parsed.hostname.endswith(DOMAINS_USED):
-            return False #check to make sure that the domains end with the 4 required ones only
+
+        # Check if URL is broken
+        if parsed.hostname is None:
+            return False 
+
+        #Check if the hostname is an accepted domain or subdomain
+        matched = False
+        for domain in DOMAINS_USED:
+            #If a match exists, then can immediately stop checking with other domains
+            if parsed.hostname == domain or parsed.hostname.endswith("." + domain):
+                matched = True
+                break
+        if not matched:
+            return False
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
             + r"|png|tiff?|mid|mp2|mp3|mp4"
