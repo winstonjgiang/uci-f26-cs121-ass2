@@ -77,6 +77,11 @@ def is_valid(url):
                 break
         if not matched:
             return False
+
+        #Skip duplicate pages from the same folder when they get re-sorted (traps)
+        if re.search(r"C=[NMSD][;&]O=[AD]", parsed.query):
+            return False
+        
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
             + r"|png|tiff?|mid|mp2|mp3|mp4"
@@ -85,7 +90,8 @@ def is_valid(url):
             + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
             + r"|epub|dll|cnf|tgz|sha1"
             + r"|thmx|mso|arff|rtf|jar|csv"
-            + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
+            + r"|rm|smil|wmv|swf|wma|zip|rar|gz"
+            + r"|c|cc|cpp|h|hpp|java|py|sh|cmake|o|class|in|am)$", parsed.path.lower())
 
     except TypeError:
         print ("TypeError for ", parsed)
