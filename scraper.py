@@ -29,7 +29,11 @@ def extract_next_links(url, resp):
     #         resp.raw_response.url: the url, again
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
-        
+    if resp.status != 200 or resp.raw_response is None:
+        return [] #resp.status == 200 is OK so we  return nothing if it isn't 200 or there's nothing on the url/page
+    page_content = resp.raw_response.content #using variable to make code easier to read
+    if not page_content:
+        return [] #if we get resp.status == 200 but the page has no content at all, then we return nothing
     
     return list()
 
