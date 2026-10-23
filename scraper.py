@@ -1,6 +1,7 @@
 import re
 import os
 import json
+from crawl_filters import CrawlFilters, is_trap
 from collections import Counter
 from urllib.parse import urlparse, urljoin, urldefrag
 from html.parser import HTMLParser
@@ -55,6 +56,7 @@ TOKEN_RE = re.compile(r"[a-z0-9]+(?:'[a-z0-9]+)*")
 page_words = {} 
 word_freq = Counter()
 unsaved_pages = 0 
+filters = CrawlFilters()
 
 def tokenize(text):
     return TOKEN_RE.findall(text.lower())
@@ -66,12 +68,14 @@ def load_stats():
             data = json.load(f)
         page_words = data.get("page_words", {})
         word_freq = Counter(data.get("word_freq", {}))
+        filters.restore(data.get("filters", {}))
 
 def reset_stats(): 
     global page_words, word_freq, unsaved_pages
     page_words = {}
     word_freq = Counter()
     unsaved_pages = 0
+    filters.restore({})
     if os.path.exists(STATS_FILE):
         os.remove(STATS_FILE)
 
@@ -79,7 +83,8 @@ def save_stats():
     global unsaved_pages
     tmp_path = STATS_FILE + ".tmp"
     with open(tmp_path, "w") as f:
-        json.dump({"page_words": page_words, "word_freq": word_freq}, f)
+        json.dump({"page_words": page_words, "word_freq": word_freq,
+                   "filters": filters.getSaveData()}, f)
     os.replace(tmp_path, STATS_FILE) 
     unsaved_pages = 0
 
@@ -133,7 +138,8 @@ load_stats()
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
-    return [link for link in links if is_valid(link)]
+    return [link for link in dict.fromkeys(links)
+            if is_valid(link) and filters.allowUrl(link)]
 
 def extract_next_links(url, resp):
     # Implementation required.
@@ -151,15 +157,27 @@ def extract_next_links(url, resp):
     if not page_content:
         return [] #if we get resp.status == 200 but the page has no content at all, then we return nothing
     
+    # Already downloaded: bound parsing work and skip explicit non-HTML types.
+    if len(page_content) > 2 * 1024 * 1024:
+        return []
+    content_type = resp.raw_response.headers.get(
+        "Content-Type", "").split(";", 1)[0].strip().lower()
+    if content_type and content_type not in {"text/html", "application/xhtml+xml"}:
+        return []
     main_url = resp.raw_response.url or url
+    if not is_valid(main_url):
+        return []
     html = page_content.decode("utf-8", errors ="ignore") #making sure everything passed is valid characters (ASCII, UTF-8 standard)
     
     parser = MainParser() #call helper func
     parser.feed(html) #feed data to func
     parser.close() #end
     page_url = urldefrag(main_url)[0]
-    if is_valid(page_url):
-        record_page(page_url, tokenize(" ".join(parser.text)))
+    words = tokenize(" ".join(parser.text))
+    # URL uniqueness is independent of content similarity for the report.
+    record_page(page_url, words)
+    if not filters.shouldFollowLink(words):
+        return []
     
     links_list = [] #all the urls we will get on the page
     for href in parser.hrefs:
@@ -194,6 +212,8 @@ def is_valid(url):
                 matched = True
                 break
         if not matched:
+            return False
+        if is_trap(url):
             return False
 
         #Skip duplicate pages from the same folder when they get re-sorted (traps)
