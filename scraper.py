@@ -157,7 +157,7 @@ def extract_next_links(url, resp):
     if not page_content:
         return [] #if we get resp.status == 200 but the page has no content at all, then we return nothing
     
-    # Already downloaded: bound parsing work and skip explicit non-HTML types.
+    # skip parsing pages larger than 2 MiB
     if len(page_content) > 2 * 1024 * 1024:
         return []
     content_type = resp.raw_response.headers.get(
@@ -174,7 +174,8 @@ def extract_next_links(url, resp):
     parser.close() #end
     page_url = urldefrag(main_url)[0]
     words = tokenize(" ".join(parser.text))
-    # URL uniqueness is independent of content similarity for the report.
+    
+    # count each URL even if its content duplicated another page
     record_page(page_url, words)
     if not filters.shouldFollowLink(words):
         return []
