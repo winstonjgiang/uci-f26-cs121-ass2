@@ -50,6 +50,7 @@ def make_hash(word): #our own hash func, turns a word into a big number
     number = 0
     for letter in word:
         number = number * 31 + ord(letter) #each letter changes the number + order matters so "abc" and "cba" are different
+        number = number % (2 ** 64) #keep it 64 bits every step, otherwise the number gets huge on big pages and it gets super slow
     number = number * 11400714819323198485 #multiply by a big odd number to mix up the bits
     number = number % (2 ** 64) #only keep the last 64 bits
     return number
