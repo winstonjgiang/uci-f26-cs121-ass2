@@ -34,6 +34,17 @@ def is_trap(url):
     if len(pairs) > 8 or len(keys) != len(set(keys)):
         return True
 
+    #wiki trap: wiki.ics (dokuwiki) + grape.ics (trac) make a bunch of extra urls for the SAME page
+    #like old versions, diffs, history, edit, media lists, index views -> same content over and over (lecture 7: traps)
+    #normal wiki pages like doku.php?id=somepage or /wiki/SomePage still get crawled
+    wiki_trap_keys = ["do", "idx", "rev", "rev2[0]", "rev2[1]", "image", "ns", "tab_files", "tab_details",
+                      "mediado", "version", "old_version", "action", "format", "daysback", "precision", "annotate"]
+    for key in keys:
+        if key in wiki_trap_keys:
+            return True #its a wiki action/old version view, not a new page
+    if "/timeline" in path or "/changeset" in path:
+        return True #trac timeline + changesets are endless lists of edits by date
+
     # Skip calendar date navigation to prevent endless crawling loops. 
     # Ordinary event detail URLs can still pass.
     calendar = re.search(r'/(?:events?|calendar)(?:/|$)', path)
