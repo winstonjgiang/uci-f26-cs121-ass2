@@ -184,7 +184,11 @@ def extract_next_links(url, resp):
     
     # count each URL even if its content duplicated another page
     record_page(page_url, words)
-    if not filters.shouldFollowLink(words):
+    important_words = [] #page words w/o stop words, used for near duplicate checking
+    for word in words:
+        if word not in STOP_WORDS:
+            important_words.append(word)
+    if not filters.shouldFollowLink(words, important_words):
         return []
     
     links_list = [] #all the urls we will get on the page

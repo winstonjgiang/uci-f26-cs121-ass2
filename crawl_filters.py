@@ -1,5 +1,4 @@
 import re
-from collections import Counter
 from urllib.parse import parse_qsl, unquote, urlparse
 
 MIN_WORDS = 50
@@ -18,9 +17,15 @@ def is_trap(url):
     if len(url) > 2048 or len(segments) > 20:
         return True
     
-    # reject paths where the same directory name appears more than 3 times
-    if any(count >= 3 for count in Counter(segments).values()):
-        return True
+    # reject paths where the same directory name appears 3 or more times
+    segment_counts = {} #counts how many times each folder name shows up in the path
+    for segment in segments:
+        if segment in segment_counts:
+            segment_counts[segment] = segment_counts[segment] + 1
+        else:
+            segment_counts[segment] = 1
+        if segment_counts[segment] >= 3:
+            return True #same folder 3+ times like /a/b/a/b/a means its looping, aka a trap
     
     # extract query paramters into name, value pairs
     pairs = parse_qsl(parsed.query, keep_blank_values=True)
@@ -139,7 +144,7 @@ class CrawlFilters:
             key = (band, (fingerprint >> (16 * band)) & 65535)
             self.bands.setdefault(key, set()).add(fingerprint)
 
-    def shouldFollowLink(self, words):
+    def shouldFollowLink(self, words, important_words): #important_words = words w/o stop words
         # skip pages with too little useful text
         if len(words) < MIN_WORDS or len(set(words)) < 15:
             return False
@@ -157,7 +162,7 @@ class CrawlFilters:
             return False
         
         # find fingerprints that could belong to similar pages
-        fingerprint = simhash(words)
+        fingerprint = simhash(important_words) #no stop words bc every page has tons of "the", "and" etc which makes different pages look alike (lecture 12 drops them too)
         candidates = set()
         for band in range(4):
             key = (band, (fingerprint >> (16 * band)) & 65535)
