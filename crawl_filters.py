@@ -42,7 +42,7 @@ def is_trap(url):
     for key in keys:
         if key in wiki_trap_keys:
             return True #its a wiki action/old version view, not a new page
-    if "/timeline" in path or "/changeset" in path:
+    if re.search(r"/(?:timeline|changeset)(?:/|$)", path):
         return True #trac timeline + changesets are endless lists of edits by date
 
     # Skip calendar date navigation to prevent endless crawling loops. 
