@@ -163,6 +163,8 @@ def extract_next_links(url, resp):
     page_content = resp.raw_response.content #using variable to make code easier to read
     if not page_content:
         return [] #if we get resp.status == 200 but the page has no content at all, then we return nothing
+    if page_content.startswith(b"%PDF"):
+        return [] #pdfs that snuck in w/o .pdf in the url, they always start w/ %PDF
 
     content_type = resp.raw_response.headers.get(
         "Content-Type", "").split(";", 1)[0].strip().lower()
