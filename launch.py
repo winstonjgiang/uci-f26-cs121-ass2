@@ -1,11 +1,9 @@
 from configparser import ConfigParser
 from argparse import ArgumentParser
-
 from utils.server_registration import get_cache_server
 from utils.config import Config
 from crawler import Crawler
 import scraper
-
 
 def main(config_file, restart):
     cparser = ConfigParser()
@@ -22,7 +20,6 @@ def main(config_file, restart):
         #If the crawler stops, save the stats so that resuming will add to it
         scraper.save_stats()
         scraper.write_report()
-
 
 if __name__ == "__main__":
     parser = ArgumentParser()

@@ -32,7 +32,6 @@ class MainParser(HTMLParser): #
         if self.skip_depth == 0:
             self.text.append(data)
 
-
 STATS_FILE = "crawl_stats.json"
 REPORT_FILE = "report.txt"
 SAVE_EVERY = 25 

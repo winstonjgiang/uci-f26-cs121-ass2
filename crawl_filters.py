@@ -29,8 +29,6 @@ def is_trap(url):
     # rejects URLs that have more than 8 parameters or if a parameter name appears more than once
     if len(pairs) > 8 or len(keys) != len(set(keys)):
         return True
-    
-
 
     # Skip calendar date navigation to prevent endless crawling loops. 
     # Ordinary event detail URLs can still pass.
@@ -41,24 +39,53 @@ def is_trap(url):
     
     return bool(calendar and (date_path or date_query))
 
+#duplicate detection below is made from scratch w/ NO libraries (none of these funcs use the imports up top)
+#lecture 11 = checksum for exact duplicates, lecture 12 = simhash for near duplicates
 
-def simhash(words):
-    # create 64-bit fingerprint in order to determine pages with similar text.
-    votes = [0] * 64
+def make_hash(word): #our own hash func, turns a word into a big number
+    number = 0
+    for letter in word:
+        number = number * 31 + ord(letter) #each letter changes the number + order matters so "abc" and "cba" are different
+    number = number * 11400714819323198485 #multiply by a big odd number to mix up the bits
+    number = number % (2 ** 64) #only keep the last 64 bits
+    return number
 
-    # repeated words get more weight
-    for word, frequency in Counter(words).items():
-        # each word given a consistent hash value across all runs
-        digest = hashlib.sha256(word.encode('utf-8')).digest()
-        value = int.from_bytes(digest[:8], 'big')
+def checksum(words): #exact duplicates (lecture 11), one number for the whole page
+    all_text = " ".join(words)
+    return make_hash(all_text) #same words in the same order = same number
 
-        # standard simhash method, using word frequencies as weights
-        for bit in range(64):
-            votes[bit] += frequency if value & (1 << bit) else -frequency
-            
-    # combine votes into page's fingerprint
-    return sum(1 << bit for bit, vote in enumerate(votes) if vote > 0)
+def simhash(words): #near duplicates (lecture 12)
+    weights = {} #step 1: count how many times each word shows up, thats the word's weight
+    for word in words:
+        if word in weights:
+            weights[word] = weights[word] + 1
+        else:
+            weights[word] = 1
 
+    totals = [0] * 64 #step 2: 64 totals, one for each bit
+    for word in weights:
+        word_hash = make_hash(word)
+        for i in range(64):
+            bit = (word_hash // (2 ** i)) % 2 #grabs bit i of the hash (0 or 1)
+            if bit == 1:
+                totals[i] = totals[i] + weights[word] #bit is 1 so add the weight
+            else:
+                totals[i] = totals[i] - weights[word] #bit is 0 so subtract the weight
+
+    fingerprint = 0 #step 3: bit i of the fingerprint is 1 if totals[i] is positive, otherwise 0
+    for i in range(64):
+        if totals[i] > 0:
+            fingerprint = fingerprint + 2 ** i
+    return fingerprint
+
+def count_different_bits(fingerprint1, fingerprint2): #how many of the 64 bits are different between 2 fingerprints
+    different = 0
+    for i in range(64):
+        bit1 = (fingerprint1 // (2 ** i)) % 2
+        bit2 = (fingerprint2 // (2 ** i)) % 2
+        if bit1 != bit2:
+            different = different + 1
+    return different
 
 class CrawlFilters:
     def __init__(self):
@@ -125,7 +152,6 @@ class CrawlFilters:
                      r'page does not exist|page cannot be found)\b', opening):
             return False
         
-
         # skip pages with text we have already seen
         checksum = hashlib.sha256(' '.join(words).encode('utf-8')).hexdigest()
         if checksum in self.checksums:
@@ -139,7 +165,6 @@ class CrawlFilters:
             candidates.update(self.bands.get(key, ()))
 
         self.checksums.add(checksum)
-
 
         # skip near duplicates (over 3 differing bits)
         if any(bin(fingerprint ^ previous).count('1') <= MAX_SIMHASH_DISTANCE
