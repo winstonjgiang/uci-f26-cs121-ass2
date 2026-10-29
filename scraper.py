@@ -141,6 +141,13 @@ def scraper(url, resp):
     return [link for link in dict.fromkeys(links)
             if is_valid(link) and filters.allowUrl(link)]
 
+def decode_page(page_content): #turns the page bytes into text, either utf-8 or utf-16 (lecture 10)
+    if page_content[:2] == b"\xff\xfe" or page_content[:2] == b"\xfe\xff":
+        return page_content.decode("utf-16", errors="ignore") #utf-16 pages start w/ FF FE or FE FF so we know right away
+    if b"\x00" in page_content[:1000]:
+        return page_content.decode("utf-16-le", errors="ignore") #no mark but has zero bytes = utf-16, normal html never has zero bytes
+    return page_content.decode("utf-8", errors="ignore") #everything else is utf-8 (plain ascii works w/ this too)
+
 def extract_next_links(url, resp):
     # Implementation required.
     # url: the URL that was used to get the page
@@ -156,10 +163,7 @@ def extract_next_links(url, resp):
     page_content = resp.raw_response.content #using variable to make code easier to read
     if not page_content:
         return [] #if we get resp.status == 200 but the page has no content at all, then we return nothing
-    
-    # skip parsing pages larger than 2 MiB
-    if len(page_content) > 2 * 1024 * 1024:
-        return []
+
     content_type = resp.raw_response.headers.get(
         "Content-Type", "").split(";", 1)[0].strip().lower()
     if content_type and content_type not in {"text/html", "application/xhtml+xml"}:
@@ -167,7 +171,9 @@ def extract_next_links(url, resp):
     main_url = resp.raw_response.url or url
     if not is_valid(main_url):
         return []
-    html = page_content.decode("utf-8", errors ="ignore") #making sure everything passed is valid characters (ASCII, UTF-8 standard)
+    html = decode_page(page_content) #bytes to text w/ the right encoding
+    if len(html) > 2 * 1024 * 1024:
+        return [] #page is too big (over ~2 mil characters) so skip, we check after decoding bc utf-16 is double the bytes
     
     parser = MainParser() #call helper func
     parser.feed(html) #feed data to func
