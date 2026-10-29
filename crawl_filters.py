@@ -1,4 +1,3 @@
-import hashlib
 import re
 from collections import Counter
 from urllib.parse import parse_qsl, unquote, urlparse
@@ -153,8 +152,8 @@ class CrawlFilters:
             return False
         
         # skip pages with text we have already seen
-        checksum = hashlib.sha256(' '.join(words).encode('utf-8')).hexdigest()
-        if checksum in self.checksums:
+        page_checksum = checksum(words) #our own checksum func from up top, no hashlib
+        if page_checksum in self.checksums:
             return False
         
         # find fingerprints that could belong to similar pages
@@ -164,12 +163,12 @@ class CrawlFilters:
             key = (band, (fingerprint >> (16 * band)) & 65535)
             candidates.update(self.bands.get(key, ()))
 
-        self.checksums.add(checksum)
+        self.checksums.add(page_checksum)
 
-        # skip near duplicates (over 3 differing bits)
-        if any(bin(fingerprint ^ previous).count('1') <= MAX_SIMHASH_DISTANCE
-               for previous in candidates):
-            return False
+        # skip near duplicates (3 or less differing bits)
+        for previous in candidates:
+            if count_different_bits(fingerprint, previous) <= MAX_SIMHASH_DISTANCE:
+                return False #too close to a page we already saw
         
         # ONLY save the fingerprints for pages that we accept
         self.fingerprints.add(fingerprint)
