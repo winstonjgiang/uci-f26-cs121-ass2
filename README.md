@@ -1,17 +1,18 @@
 ## ABOUT
 
-This is the base implementation of a full crawler that uses a spacetime
-cache server to receive requests.
+This project crawls the `ics.uci.edu`, `cs.uci.edu`,
+`informatics.uci.edu`, and `stat.uci.edu` domains through the cache server.
 
-## CONFIGURATION
+The crawler avoids traps, similar pages, dead URLs, and large files with low information value. It tokenizes each page's 
+text, tracks the statistics, and writes the results to `report.txt` when the crawl completes.
 
-# Crawler Design Decisions
+## CRAWLER DESIGN DECISIONS
 
 Our crawler extends the provided spacetime-crawler4py framework.
 Our main additions are HTML parsing, URL filtering, content similarity
 detection, and persistent statistics for the assignment report.
 
-## Trap Prevention
+### Trap Prevention
 
 We combined several rules to avoid traps:
 
@@ -20,6 +21,7 @@ We combined several rules to avoid traps:
 - Reject queries with more than eight parameters or queries with repeated parameter names.
 - Limit distinct query combinations to 30 per hostname and path.
 - Reject calendar date-navigation patterns.
+- Reject directory listing sort links (`C=N;O=D`) which show the same files in different orders.
 - Reject specific wiki revision, action, media, and export parameters, along with complete timeline and changeset path segments.
 
 These rules prioritize ordinary article views over historical versions
@@ -30,28 +32,31 @@ using the same parameter names.
 Query combinations are sorted when tracking the 30-variant allowance.
 This does not canonicalize the URLs stored in the frontier.
 
-## Text Extraction and Page Checks
+### Text Extraction and Page Checks
 
 We use Python's HTMLParser to collect links and text, excluding script,
 style, noscript, and template content.
 
 We skipped unsuccessful or empty responses, detected PDFs, explicitly
-non-HTML content types, and decoded documents larger than about ~two million characters.
+non-HTML content types, non-HTML file extensions, and decoded documents larger than about ~two million characters.
 
 We stopped link expansion from pages with fewer than 50 tokens, fewer
 than 15 distinct tokens, or any pages with recognized error messages near the beginning.
 
-## Duplicate Detection
+### Duplicate Detection
 
 We manually implemented a custom 64-bit text checksum and a frequency-weighted
 64-bit SimHash without a duplicate-detection library. The SimHash excluded our list of English stop words.
 
-Fingerprints differing by at most three bits were treated as near duplicates.
+For each page, SimHash creates a 64-bit number (a fingerprint) that summarizes the page's words which we split into four 16-bit 
+sections. 2 near duplicate fingerprints differ in at most 3 bits, so at least 1 of their 4 sections will be the same.
+This means we only need to compare a new page against saved fingerprints that share at least 1 matching section instead of
+comparing with every saved fingerprint.
 
 Duplicate detection stops outgoing-link expansion after downloading.
 It does not remove URL-distinct pages from the report.
 
-## Report Statistics
+### Report Statistics
 
 Each recorded response URL is counted once after fragment removal. Recording occurs before our checks for
 low-information and similarity, so pages rejected by those checks still contribute to the statistics.
@@ -59,11 +64,18 @@ low-information and similarity, so pages rejected by those checks still contribu
 Longest-page counts include stop words. Word frequencies exclude the
 embedded English stop-word list, single-character tokens, and numeric tokens.
 
-## Persistence and Politeness
+### Persistence and Politeness
 
 The frontier is stored in frontier.shelve. Statistics and filter state
 are saved to crawl_stats.json for every 25 newly recorded pages and when the crawl reaches its end.
 Statistics are written to a temporary file before replacing the previous saved one.
+
+### Final Report
+
+The results of our final crawl are in `report.txt`. Running the crawler or `python3 scraper.py` will
+overwrite it.
+
+## CONFIGURATION
 
 ### Step 1: Install dependencies
 
