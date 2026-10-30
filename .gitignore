@@ -110,4 +110,3 @@ venv.bak/
 *.shelve
 # crawl report output
 crawl_stats.json*
-report.txt
