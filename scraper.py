@@ -12,7 +12,7 @@ DOMAINS_USED =("ics.uci.edu","cs.uci.edu","informatics.uci.edu","stat.uci.edu")
 # HTML markup doesn't count as words
 SKIP_TEXT_TAGS = ("script", "style", "noscript", "template")
 
-class MainParser(HTMLParser): #
+class MainParser(HTMLParser): 
     def __init__(self): #helper function that goes tag by tag on page
         super().__init__()
         self.hrefs = [] #keeping <a> of href 
@@ -57,62 +57,84 @@ word_freq = Counter()
 unsaved_pages = 0 
 filters = CrawlFilters()
 
-def tokenize(text):
+# Split text into lowercase words
+def tokenize(text): 
     return TOKEN_RE.findall(text.lower())
 
+# Loads stats from crawl_stats.json 
 def load_stats(): 
     global page_words, word_freq
+    # If a crawl stops and starts again, it picks up where it left off
     if os.path.exists(STATS_FILE):
         with open(STATS_FILE) as f:
             data = json.load(f)
-        page_words = data.get("page_words", {})
-        word_freq = Counter(data.get("word_freq", {}))
-        filters.restore(data.get("filters", {}))
+        # Maps each URL to its word count
+        page_words = data.get("page_words", {}) 
+        # Maps each word to number of times it appears across all pages
+        word_freq = Counter(data.get("word_freq", {})) 
+        # Restores trap/duplicate detection state
+        filters.restore(data.get("filters", {})) 
 
+# Clears stats in memory
 def reset_stats(): 
     global page_words, word_freq, unsaved_pages
     page_words = {}
     word_freq = Counter()
     unsaved_pages = 0
-    filters.restore({})
+    # Empty dictionary resets the filters to a blank state
+    filters.restore({}) 
+    # Delete saved file which is done when starting a fresh crawl
     if os.path.exists(STATS_FILE):
         os.remove(STATS_FILE)
 
+# Saves stats to crawl_stats.json
 def save_stats():
     global unsaved_pages
+    # Write to a temp file first so a crash mid-write doesn't corrupt the saved stats
     tmp_path = STATS_FILE + ".tmp"
     with open(tmp_path, "w") as f:
         json.dump({"page_words": page_words, "word_freq": word_freq,
                    "filters": filters.getSaveData()}, f)
-    os.replace(tmp_path, STATS_FILE) 
+    # Replace old stats file with temp file after its been fully written
+    os.replace(tmp_path, STATS_FILE)
     unsaved_pages = 0
 
+# Records a page's word count and adds its words to frequency list
 def record_page(url, words):
     global unsaved_pages
+    # Skip pages that were already counted
     if url in page_words:
-        return 
+        return
+    # Total word count includes stop words, used for finding the longest page
     page_words[url] = len(words)
     for word in words:
+        # Skip stop words, single characters, and plain numbers
         if word in STOP_WORDS or len(word) < 2 or word.isdigit():
             continue
         word_freq[word] += 1
     unsaved_pages += 1
+    # Only save to disk if 25 pages have been built
     if unsaved_pages >= SAVE_EVERY:
         save_stats()
 
+# Count the number of unique pages found in each subdomain of the given domain
 def subdomain_counts(domain="ics.uci.edu"):
     counts = Counter()
     for url in page_words:
         host = (urlparse(url).hostname or "").lower()
+        # Count the page if it's on ics.uci.edu or one of its subdomains
         if host == domain or host.endswith("." + domain):
             counts[host] += 1
     return counts
 
+# Record findings that answer the report questions for the assignment 
 def write_report():
     lines = []
+    # Q1: Number of unique pages 
     lines.append(f"1. Unique pages found: {len(page_words)}")
     lines.append("")
 
+    # Q2: Longest page (greatest number of words) 
     if page_words:
         longest_url = max(page_words, key=page_words.get)
         lines.append(f"2. Longest page: {longest_url} ({page_words[longest_url]} words)")
@@ -120,23 +142,28 @@ def write_report():
         lines.append("2. Longest page: none")
     lines.append("")
 
+    # Q3: 50 most common words
     lines.append("3. 50 most common words (stop words removed):")
     for rank, (word, count) in enumerate(word_freq.most_common(50), 1):
         lines.append(f"   {rank}. {word}, {count}")
     lines.append("")
 
+    # Q4: Number of subdomains
     subdomains = subdomain_counts()
     lines.append(f"4. Subdomains of ics.uci.edu: {len(subdomains)}")
     for host in sorted(subdomains):
-        lines.append(f"http://{host}, {subdomains[host]}") 
+        lines.append(f"http://{host}, {subdomains[host]}")
 
     with open(REPORT_FILE, "w") as f:
         f.write("\n".join(lines) + "\n")
 
+# Runs once when the crawler starts, so it continues with the stats from the last run
 load_stats()
 
+# Returns the links from this page that the crawler should visit next
 def scraper(url, resp):
     links = extract_next_links(url, resp)
+    # Remove duplicate links and return links that are valid and not traps
     return [link for link in dict.fromkeys(links)
             if is_valid(link) and filters.allowUrl(link)]
 
@@ -188,6 +215,7 @@ def extract_next_links(url, resp):
     for word in words:
         if word not in STOP_WORDS:
             important_words.append(word)
+    # Don't follow links from pages that are too short, error pages, or duplicates of pages we've seen
     if not filters.shouldFollowLink(words, important_words):
         return []
     
